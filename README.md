@@ -1,12 +1,12 @@
 # The VehMocap Importer For Blender
 
-This addon is a helper tool that allows you to import the JSON files exported by the [Vehicle Motion Capture MTA:SA resource](https://github.com/ThePortuguesePlayer/VehMocap) as animation into Blender 2.80 and up.\
+This addon is a helper tool that allows you to import the JSON files exported by the [Vehicle Motion Capture MTA:SA resource](https://github.com/ThePortuguesePlayer/VehMocap) as animation into Blender 2.80 and up.
 
 ## Installation
 
 Install the .py file like any other Blender addon.\
 Once activated, you can find it on your 3D Viewport's side panel, under the Animation tab.\
-It is assumed you already have a way of importing DFF models into Blender, such as by using the [DragonFF addon](https://github.com/Parik27/DragonFF).\
+It is assumed you already have a way of importing DFF models into Blender, such as by using the [DragonFF addon](https://github.com/Parik27/DragonFF).
 
 ## Usage
 
