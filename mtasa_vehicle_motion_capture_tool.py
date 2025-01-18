@@ -17,6 +17,7 @@ import json
 from mathutils import Euler
 from math import radians, pi, floor
 from datetime import timedelta
+from sys import stdout
 
 bl_info = {
     "name": "MTA:SA Vehicle Motion Capture Tool",
@@ -57,13 +58,29 @@ class MTAVEHMOCAP_OT_RunAction(Operator):
             dummies[dummy].rotation_mode = "XYZ"
         camera = self.create_camera(
             data["i"]["vN"] + "-" + str(data["i"]["fC"]), scene)
-        if True == True:  # THINK ABOUT THIS
+        if self.is_frame_data_valid(data, "1"):
+            context.window_manager.progress_begin(0, 100)
             fpsscale = 1000 / scene.render.fps
             self.parseanimation(data, fpsscale, dummies,
-                                camera, scene.frame_current)
+                                camera, scene.frame_current, context.window_manager)
+            context.window_manager.progress_end()
             return {'FINISHED'}
         else:
             return {'CANCELED'}
+
+    def is_frame_data_valid(self, data, frame):
+        if frame is int:
+            frame = str(frame)
+        keyframe = data[frame]
+        if not "v" in keyframe:
+            return False
+        if not "fT" in keyframe:
+            return False
+        if (not "V" in keyframe) and (not "l" in keyframe):
+            return False
+        if not "s" in keyframe:
+            return False
+        return True
 
     def get_dummy(self, dummyname: str, scene, key: str):
         if not dummyname:
@@ -90,7 +107,7 @@ class MTAVEHMOCAP_OT_RunAction(Operator):
             if dummies[dummy]:
                 if len(dummies[dummy].children) == 1:
                     wheels[dummy] = dummies[dummy].children[0]
-                    print("Got to len() check #1")
+                    # print("Got to len() check #1")
                 elif dummy != "veh" and len(dummies[dummy].children) > 1:
                     chosen = None
                     size = 0.0
@@ -98,10 +115,10 @@ class MTAVEHMOCAP_OT_RunAction(Operator):
                         if abs(child.dimensions.y - child.dimensions.z) < 0.01 and child.dimensions.y > size:
                             chosen = child
                     wheels[dummy] = chosen
-        print("Printing wheel objects found in dummies:")
-        print(wheels)
+        #print("Printing wheel objects found in dummies:")
+        # print(wheels)
         if len(wheels) == 1:
-            print("Found 1 wheel object")
+            #print("Found 1 wheel object")
             for wheel in wheels:
                 if wheels[wheel].dimensions.y <= wheels[wheel].dimensions.z:
                     size = wheels[wheel].dimensions.y * 0.5
@@ -110,7 +127,7 @@ class MTAVEHMOCAP_OT_RunAction(Operator):
                     size = wheels[wheel].dimensions.z * 0.5
                     return {"front": size, "back": size}
         elif len(wheels) > 1:
-            print("Found " + str(len(wheels)) + " wheel objects")
+            #print("Found " + str(len(wheels)) + " wheel objects")
             sizes = {}
             for wheel in wheels:
                 if wheel[1] == "f":
@@ -128,7 +145,7 @@ class MTAVEHMOCAP_OT_RunAction(Operator):
             print("Found no wheel objects. Radius set to the default of 0.34.")
             return {"front": 0.34, "back": 0.34}
 
-    def parseanimation(self, data, fpsscale, dummies, camera, time):
+    def parseanimation(self, data, fpsscale, dummies, camera, time, wm):
         # Wheel Radius defaults to 0.34 if no model is found.
         wheelradius = self.get_wheel_radius(dummies)
         length = data["i"]["fC"]
@@ -151,13 +168,29 @@ class MTAVEHMOCAP_OT_RunAction(Operator):
         keyframe_counter = 1
         print("There are " + str(length) + " keyframes to set.")
         for _ in range(length):
+            # Progress updates section:
+            progress = int(keyframe_counter / length * 100.0)
+            stdout.write("\r" + self.draw_stdout_progress_bar(progress) + "  " + str(keyframe_counter) + " at " +
+                         str(time))
+            stdout.flush()
+            wm.progress_update(progress)
+            # -------------------------
             framedata = data[str(keyframe_counter)]
-            print(str(keyframe_counter) + " at " + str(time))
             self.setkeyframes(dummies, framedata, time,
                               rothistory, camera, wheelradius)
             keyframe_counter += 1
             if keyframe_counter <= length:
                 time += (framedata["fT"] / fpsscale)
+
+    def draw_stdout_progress_bar(self, progress, include_percentage=False):
+        block = int(round(0.3*progress))
+        msg = "[{0}]".format("#"*block + "-"*(30-block))
+        if include_percentage:
+            if progress == 100:
+                msg += " DONE"
+            else:
+                msg += str(progress) + "%"
+        return msg
 
     def create_camera(self, cam_name, scene):
         camera = bpy.data.cameras.new(cam_name)
@@ -240,7 +273,11 @@ class MTAVEHMOCAP_OT_RunAction(Operator):
 
     def getvehicletraveldistance(self, framedata):
         base = 0.02  # It's 1/50 seconds
-        velocity = framedata["V"]  # Distance traveled in 0.02 seconds.
+        velocity = None  # Distance traveled in 0.02 seconds.
+        if "V" in framedata:
+            velocity = framedata["V"]
+        else:
+            velocity = framedata["l"]
         frametime = framedata["fT"] * 0.001  # Frame time converted to seconds.
         # Returns distance traveled in [frametime].
         return frametime * velocity / base
@@ -278,7 +315,7 @@ class MTAVEHMOCAP_OT_RunAction(Operator):
 
     def oldoffsetrotationwheel(self, val, dic, dist, wheelradius):
         rotations = self.getwheelrotations(dist, wheelradius)
-        tfr = rotations
+        #tfr = rotations
         lastval = dic["x_history"]
         # This condition assumes the vehicle can't move fast enough in reverse to make a full wheel turn within a frame.
         if abs(rotations) >= 1.0:
@@ -289,7 +326,7 @@ class MTAVEHMOCAP_OT_RunAction(Operator):
         elif (lastval + lastval*rotations) > val + 45:
             dic["angle_offset_x"] += 360.0
         dic["x_history"] = val
-        print([tfr, rotations, val, lastval, dic["x_history"]])
+        #print([tfr, rotations, val, lastval, dic["x_history"]])
         return val + dic["angle_offset_x"]
 
     def offsetrotationwheel(self, isleftside, val, dic, dist, wheelradius):
@@ -320,7 +357,7 @@ class MTAVEHMOCAP_Props(PropertyGroup):
     f_path: StringProperty(
         name="JSON File",
         subtype="FILE_PATH",
-        default="C:/Program Files (x86)/MTA San Andreas 1.5/mods/deathmatch/resources/motiontracker/logs/",
+        default="C:/Program Files (x86)/MTA San Andreas 1.5/mods/deathmatch/resources/vehmocap/captures/",
         description="The JSON file, generated from the Vehicle Motion Capture MTA:SA resource, to process",
     )
     veh_index: IntProperty(
